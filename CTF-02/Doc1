@@ -1,0 +1,276 @@
+Challenge-02
+Solving CTF Labs on ThunderCipher
+
+YUVARAJ M
+
+CityCare Hospital Portal – Writeup
+
+Difficulty: Easy
+Category: Web Exploitation
+Vulnerability: Broken Access Control (IDOR + Cookie Manipulation)
+Target IP: 192.168.5.88
+Port: 5000
+
+Challenge Description
+
+The CityCare Hospital portal is a healthcare management application running on port 5000.
+
+Users can:
+
+Register
+
+Login
+
+View Dashboard
+
+Access Medical Records
+
+Attempt to access Admin Panel
+
+The objective was to:
+
+Gain unauthorized access to the /admin endpoint.
+
+Access another patient’s medical record and retrieve the hidden flag.
+
+The challenge focuses on analyzing how the application handles authorization and access control.
+
+Enumeration Phase
+Step 1 – Port Scanning
+
+Performed an Nmap scan:
+
+nmap 192.168.5.88 -A
+
+Open ports found:
+
+22 (SSH)
+
+5000 (HTTP – Flask Application)
+
+The web application was running on port 5000.
+
+Accessed:
+
+http://192.168.5.88:5000
+Application Analysis
+Step 2 – Exploring the Application
+
+After registering and logging in, the application provided:
+
+Dashboard
+
+Medical Record section
+
+Admin tab (restricted)
+
+When accessing:
+
+http://192.168.5.88:5000/admin
+
+The response was:
+
+Access Denied
+
+This indicated role-based access control was implemented.
+
+FLAG 1 – Admin Panel Access
+Step 3 – Inspecting Cookies
+
+Opened Firefox Developer Tools:
+
+F12 → Application → Cookies
+
+Observed cookies:
+
+role = 0
+user_id = 10
+
+Observations:
+
+role = 0 → Normal user
+
+user_id = 10 → Logged-in user
+
+Cookies were not HttpOnly
+
+Cookies were client-controlled
+
+This suggested the application was relying on client-side cookies for authorization.
+
+Step 4 – Privilege Escalation via Cookie Manipulation
+
+Modified cookie value:
+
+Original:
+
+role = 0
+
+Modified:
+
+role = 1
+
+After changing the role cookie, refreshed:
+
+http://192.168.5.88:5000/admin
+
+The Admin panel loaded successfully.
+
+Step 5 – Flag Captured
+
+The admin page displayed:
+
+ThunderCipher{broken_access_control_cookie_trust_2026}
+Vulnerability Explanation – Vertical Privilege Escalation
+
+The application trusted the role value stored in the client-side cookie.
+
+Example vulnerable logic:
+
+if request.cookies.get("role") == "1":
+    allow_admin()
+
+Since cookies are fully controlled by the client, modifying the value resulted in unauthorized admin access.
+
+This vulnerability is categorized under:
+
+Broken Access Control
+
+Vertical Privilege Escalation
+
+OWASP Top 10 – A01
+
+FLAG 2 – Accessing Another Patient Record (IDOR)
+Step 6 – Analyzing Medical Record Endpoint
+
+While viewing medical records, the following URL was observed:
+
+/medical_record?id=10
+
+The id parameter controlled which patient record was displayed.
+
+This indicated a potential IDOR vulnerability.
+
+Step 7 – Exploiting IDOR
+
+Modified the URL:
+
+Original:
+
+/medical_record?id=10
+
+Modified:
+
+/medical_record?id=1
+
+The application displayed:
+
+Patient Name: Admin Patient
+Diagnosis: Sensitive Cancer Report - ThunderCipher{idor_exposed_sensitive_patient_data}
+Step 8 – Flag Captured
+
+Second flag obtained:
+
+ThunderCipher{idor_exposed_sensitive_patient_data}
+Vulnerability Explanation – IDOR
+
+The server directly used the id parameter to fetch medical records without verifying ownership.
+
+Example vulnerable logic:
+
+record_id = request.args.get("id")
+return get_medical_record(record_id)
+
+Missing validation:
+
+if record.owner_id != session["user_id"]:
+    deny_access()
+
+This allowed any authenticated user to access other patients’ records.
+
+This vulnerability is categorized under:
+
+Insecure Direct Object Reference (IDOR)
+
+Horizontal Privilege Escalation
+
+Broken Access Control
+
+Impact
+
+If deployed in a real-world healthcare system, this vulnerability could allow:
+
+Unauthorized access to patient medical data
+
+Exposure of confidential records
+
+Unauthorized administrative access
+
+Data manipulation or deletion
+
+Regulatory violations (HIPAA / GDPR)
+
+Severity: Critical
+
+Mitigation
+1 – Do Not Trust Client-Side Role
+
+Authorization should be enforced server-side:
+
+if session["role"] != "admin":
+    return "Unauthorized"
+2 – Validate Resource Ownership
+
+Before serving records:
+
+if session["user_id"] != record.owner_id:
+    return "Forbidden"
+3 – Secure Cookies
+
+Use HttpOnly
+
+Use Secure flag
+
+Use SameSite
+
+Store sessions server-side
+
+Never trust client-controlled identifiers for authorization.
+
+Lessons Learned
+
+Always inspect cookies for role-based logic
+
+If you see IDs in URLs → test for IDOR
+
+Client-side authorization is insecure
+
+Broken Access Control is one of the most critical web vulnerabilities
+
+Small logic flaws can lead to complete system compromise
+
+Attack Flow Summary
+
+Scanned target → Found port 5000
+
+Registered test account
+
+Attempted to access /admin → Access Denied
+
+Inspected cookies → Found role=0
+
+Modified role=1 → Gained admin access
+
+Retrieved first flag
+
+Inspected medical_record endpoint
+
+Modified id parameter
+
+Accessed admin patient record
+
+Retrieved second flag
+
+Final Flags
+ThunderCipher{broken_access_control_cookie_trust_2026}
+ThunderCipher{idor_exposed_sensitive_patient_data}
